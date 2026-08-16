@@ -1,0 +1,15 @@
+{
+  "name": "waitlist-queue",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-07-01",
+  "assets": { "directory": "./public" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "waitlist-queue",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "routes": [{ "pattern": "waitlist-queue.jozo.beer", "custom_domain": true }]
+}
