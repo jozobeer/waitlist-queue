@@ -45,13 +45,24 @@ async function queueSnapshot(request: APIRequestContext) {
   return { total: body.total, max };
 }
 
+function totalLabel(n: number): string {
+  return `現在 ${n} 人が参加中`;
+}
+
 async function openSession(browser: Browser, ip: string) {
   const context = await browser.newContext({
     extraHTTPHeaders: { "CF-Connecting-IP": ip },
   });
   const page = await context.newPage();
+  const listLoaded = page.waitForResponse((res) => {
+    const url = new URL(res.url());
+    return url.pathname === "/api/entries" && res.request().method() === "GET" && res.ok();
+  });
   await page.goto("/");
-  await expect(page.getByTestId("total")).toBeVisible();
+  const res = await listLoaded;
+  const body = (await res.json()) as { total: number };
+  // 初期描画は useState(0) なので、可視待ちだけだと GET 完了前の 0 を確定値にしてしまう
+  await expect(page.getByTestId("total")).toHaveText(totalLabel(body.total));
   return { context, page };
 }
 
@@ -60,8 +71,10 @@ async function join(page: Page, name: string) {
   await page.getByTestId("join-button").click();
 }
 
-async function readTotal(page: Page): Promise<number> {
-  return parseTotal(await page.getByTestId("total").innerText());
+async function waitJoinOutcome(page: Page) {
+  await expect(page.getByTestId("my-position").or(page.getByTestId("form-error"))).toBeVisible({
+    timeout: 20_000,
+  });
 }
 
 test.describe.serial("AC1: 参加すると連番の整理券番号が表示され、同時参加でも重複しない", () => {
@@ -111,9 +124,7 @@ test.describe.serial("AC1: 参加すると連番の整理券番号が表示さ�
       expect(numbers).toEqual([max + 4, max + 5, max + 6, max + 7, max + 8]);
 
       await parallel[0]!.page.reload();
-      await expect(parallel[0]!.page.getByTestId("total")).toHaveText(
-        `現在 ${startTotal + 8} 人が参加中`,
-      );
+      await expect(parallel[0]!.page.getByTestId("total")).toHaveText(totalLabel(startTotal + 8));
       await expect(parallel[0]!.page.getByTestId("entry-row")).toHaveCount(startTotal + 8);
     } finally {
       await Promise.all(opened.map((s) => s.context.close()));
@@ -133,11 +144,11 @@ test("AC2: 別セッションでも同じ順位一覧が見える", async ({ bro
   const totalA = await a.page.getByTestId("total").innerText();
 
   const b = await openSession(browser, clientIp("ac2b"));
+  await expect(b.page.getByTestId("total")).toHaveText(totalA);
   const rowsB = await b.page.getByTestId("entry-row").allTextContents();
   const totalB = await b.page.getByTestId("total").innerText();
 
   expect(rowsB).toEqual(rowsA);
-  expect(totalB).toBe(totalA);
   expect(rowsA).toHaveLength(parseTotal(totalA));
   expect(rowsB).toHaveLength(parseTotal(totalB));
   await expect(b.page.getByTestId("my-position")).toHaveCount(0);
@@ -146,9 +157,10 @@ test("AC2: 別セッションでも同じ順位一覧が見える", async ({ bro
   await b.context.close();
 });
 
-test("AC3: 名前だけで参加でき、空と 25 文字は拒否され 24 文字は通る", async ({ browser }) => {
+test("AC3: 名前だけで参加でき、空と 25 文字は拒否され 24 文字は通る", async ({ browser, request }) => {
+  const { total: beforeTotal } = await queueSnapshot(request);
   const { context, page } = await openSession(browser, clientIp("ac3"));
-  const beforeTotal = await readTotal(page);
+  await expect(page.getByTestId("total")).toHaveText(totalLabel(beforeTotal));
 
   await expect(page.locator("form input")).toHaveCount(1);
   await expect(page.locator('input[type="password"]')).toHaveCount(0);
@@ -158,31 +170,32 @@ test("AC3: 名前だけで参加でき、空と 25 文字は拒否され 24 文�
 
   await join(page, "");
   await expect(page.getByTestId("form-error")).toHaveText("名前を入力してください");
-  expect(await readTotal(page)).toBe(beforeTotal);
+  await expect(page.getByTestId("total")).toHaveText(totalLabel(beforeTotal));
 
   await join(page, "あ".repeat(25));
   await expect(page.getByTestId("form-error")).toHaveText("名前は 24 文字までです");
-  expect(await readTotal(page)).toBe(beforeTotal);
+  await expect(page.getByTestId("total")).toHaveText(totalLabel(beforeTotal));
 
   const name24 = "あ".repeat(24);
   await join(page, name24);
   await expect(page.getByTestId("my-position")).toBeVisible();
-  await expect(page.getByTestId("total")).toHaveText(`現在 ${beforeTotal + 1} 人が参加中`);
+  await expect(page.getByTestId("total")).toHaveText(totalLabel(beforeTotal + 1));
   await expect(page.getByTestId("entry-row").last()).toHaveText(new RegExp(`番 ${name24}$`));
   expect(await page.evaluate(() => document.cookie)).toBe("");
 
   await context.close();
 });
 
-test("AC4: 10 秒に 3 件まで許可し 4 件目を拒否、10 秒経過後に再開", async ({ browser }) => {
+test("AC4: 10 秒に 3 件まで許可し 4 件目を拒否、10 秒経過後に再開", async ({ browser, request }) => {
   test.setTimeout(60_000);
+  const { total: beforeTotal } = await queueSnapshot(request);
   const { context, page } = await openSession(browser, clientIp("ac4seq"));
-  const beforeTotal = await readTotal(page);
+  await expect(page.getByTestId("total")).toHaveText(totalLabel(beforeTotal));
 
   for (let i = 1; i <= 3; i++) {
     await join(page, `逐次${i}`);
     await expect(page.getByTestId("my-position")).toBeVisible();
-    await expect(page.getByTestId("total")).toHaveText(`現在 ${beforeTotal + i} 人が参加中`);
+    await expect(page.getByTestId("total")).toHaveText(totalLabel(beforeTotal + i));
   }
   const thirdTicket = await page.getByTestId("my-position").innerText();
 
@@ -190,12 +203,12 @@ test("AC4: 10 秒に 3 件まで許可し 4 件目を拒否、10 秒経過後に
   await expect(page.getByTestId("form-error")).toHaveText(
     "参加が集中しています。10 秒ほど待って再度お試しください",
   );
-  expect(await readTotal(page)).toBe(beforeTotal + 3);
+  await expect(page.getByTestId("total")).toHaveText(totalLabel(beforeTotal + 3));
   await expect(page.getByTestId("my-position")).toHaveText(thirdTicket);
 
   await page.waitForTimeout(10_500);
   await join(page, "逐次5");
-  await expect(page.getByTestId("total")).toHaveText(`現在 ${beforeTotal + 4} 人が参加中`);
+  await expect(page.getByTestId("total")).toHaveText(totalLabel(beforeTotal + 4));
   await expect(page.getByTestId("my-position")).not.toHaveText(thirdTicket);
 
   await context.close();
@@ -203,11 +216,13 @@ test("AC4: 10 秒に 3 件まで許可し 4 件目を拒否、10 秒経過後に
 
 test("AC4: 同一クライアントキーの 6 セッションが同時参加しても成功はちょうど 3 件", async ({
   browser,
+  request,
 }) => {
   test.setTimeout(90_000);
+  const { total: beforeTotal } = await queueSnapshot(request);
   const observer = await openSession(browser, clientIp("ac4obs"));
-  const beforeTotal = await readTotal(observer.page);
-  const beforeRows = await observer.page.getByTestId("entry-row").count();
+  await expect(observer.page.getByTestId("total")).toHaveText(totalLabel(beforeTotal));
+  await expect(observer.page.getByTestId("entry-row")).toHaveCount(beforeTotal);
   const sharedIp = clientIp("ac4par");
   const sessions = await Promise.all(
     [1, 2, 3, 4, 5, 6].map((n) => openSession(browser, sharedIp)),
@@ -218,14 +233,7 @@ test("AC4: 同一クライアントキーの 6 セッションが同時参加し
       sessions.map((s, i) => s.page.getByTestId("name-input").fill(`並行${i + 1}`)),
     );
     await Promise.all(sessions.map((s) => s.page.getByTestId("join-button").click()));
-    await Promise.all(
-      sessions.map((s) =>
-        Promise.race([
-          s.page.getByTestId("my-position").waitFor({ state: "visible", timeout: 20_000 }),
-          s.page.getByTestId("form-error").waitFor({ state: "visible", timeout: 20_000 }),
-        ]),
-      ),
-    );
+    await Promise.all(sessions.map((s) => waitJoinOutcome(s.page)));
 
     const successes: { position: number; name: string }[] = [];
     let errorCount = 0;
@@ -252,10 +260,8 @@ test("AC4: 同一クライアントキーの 6 セッションが同時参加し
     expect(new Set(successes.map((s) => s.position)).size).toBe(3);
 
     await observer.page.reload();
-    await expect(observer.page.getByTestId("total")).toHaveText(
-      `現在 ${beforeTotal + 3} 人が参加中`,
-    );
-    await expect(observer.page.getByTestId("entry-row")).toHaveCount(beforeRows + 3);
+    await expect(observer.page.getByTestId("total")).toHaveText(totalLabel(beforeTotal + 3));
+    await expect(observer.page.getByTestId("entry-row")).toHaveCount(beforeTotal + 3);
     const rows = await observer.page.getByTestId("entry-row").allTextContents();
     for (const success of successes) {
       expect(rows).toContain(`${success.position} 番 ${success.name}`);
