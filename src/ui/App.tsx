@@ -97,6 +97,28 @@ export function App() {
       ) : null}
       <JoinForm onJoin={handleJoin} submitting={submitting} error={formError} />
       <QueueList entries={entries} total={total} listError={listError} />
+      <section className="help" id="how-to" aria-labelledby="how-to-heading">
+        <h2 id="how-to-heading">使い方</h2>
+        <ol>
+          <li>名前を入力する（1〜24文字）</li>
+          <li>「参加する」を押す</li>
+          <li>画面に整理券番号が表示される</li>
+          <li>参加中の一覧で全員の順番を確認する</li>
+        </ol>
+      </section>
+      <section className="help" id="faq" aria-labelledby="faq-heading">
+        <h2 id="faq-heading">FAQ</h2>
+        <dl>
+          <dt>整理券番号はどこで確認できますか？</dt>
+          <dd>
+            参加すると画面上部に「あなたの整理券番号は N 番です」と出ます。同じブラウザなら再訪時も残ります。
+          </dd>
+          <dt>別の端末でも同じ一覧が見えますか？</dt>
+          <dd>はい。認証はなく、どのブラウザから開いても同じ待ち行列です。</dd>
+          <dt>連続して何回でも参加できますか？</dt>
+          <dd>同じ接続元からは 10 秒に 3 件までです。超えると少し待ってから再度参加できます。</dd>
+        </dl>
+      </section>
     </main>
   );
 }

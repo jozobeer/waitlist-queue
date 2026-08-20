@@ -121,3 +121,43 @@ h1 {
 .queue-list li:first-child {
   border-top: 0;
 }
+
+.help {
+  margin-top: 2.25rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+}
+
+.help + .help {
+  margin-top: 1.5rem;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.help h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.help ol {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.help li + li {
+  margin-top: 0.35rem;
+}
+
+.help dt {
+  margin-top: 0.85rem;
+  font-weight: 700;
+}
+
+.help dt:first-of-type {
+  margin-top: 0;
+}
+
+.help dd {
+  margin: 0.25rem 0 0;
+  color: #4a574c;
+}

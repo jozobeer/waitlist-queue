@@ -35,6 +35,24 @@ function parseTotal(text: string): number {
   return Number(m[1]);
 }
 
+function collectWebApplications(data: unknown): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  const visit = (node: unknown) => {
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+      return;
+    }
+    if (!node || typeof node !== "object") return;
+    const rec = node as Record<string, unknown>;
+    const type = rec["@type"];
+    const types = Array.isArray(type) ? type : [type];
+    if (types.includes("WebApplication")) out.push(rec);
+    if (rec["@graph"]) visit(rec["@graph"]);
+  };
+  visit(data);
+  return out;
+}
+
 async function queueSnapshot(request: APIRequestContext) {
   const res = await request.get("/api/entries");
   const body = (await res.json()) as {
@@ -269,6 +287,40 @@ test("AC4: 同一クライアントキーの 6 セッションが同時参加し
   } finally {
     await Promise.all([observer.context.close(), ...sessions.map((s) => s.context.close())]);
   }
+});
+
+test.describe("SEO基礎", () => {
+  test("meta description があり content が空でない", async ({ page }) => {
+    await page.goto("/");
+    const meta = page.locator('meta[name="description"]');
+    await expect(meta).toHaveCount(1);
+    await expect(meta).toHaveAttribute("content", /\S/);
+  });
+
+  test("JSON-LD の WebApplication に必須フィールドがある", async ({ page }) => {
+    await page.goto("/");
+    const texts = await page.locator('script[type="application/ld+json"]').allTextContents();
+    expect(texts.length).toBeGreaterThan(0);
+    const apps = texts.flatMap((text) => collectWebApplications(JSON.parse(text)));
+    expect(apps.length).toBeGreaterThan(0);
+    const app = apps[0]!;
+    expect(typeof app.name).toBe("string");
+    expect(String(app.name).trim()).not.toBe("");
+    expect(typeof app.description).toBe("string");
+    expect(String(app.description).trim()).not.toBe("");
+    expect(typeof app.url).toBe("string");
+    expect(String(app.url).trim()).not.toBe("");
+    expect(typeof app.applicationCategory).toBe("string");
+    expect(String(app.applicationCategory).trim()).not.toBe("");
+    const offers = app.offers as { price?: unknown } | undefined;
+    expect(String(offers?.price)).toBe("0");
+  });
+
+  test("使い方と FAQ の見出しが初期表示にある", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "使い方" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "FAQ" })).toBeVisible();
+  });
 });
 
 test("AC5: file:// でもタイトルとフッターが描画される", async ({ page }) => {
