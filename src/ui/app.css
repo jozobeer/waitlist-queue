@@ -88,9 +88,51 @@ h1 {
 }
 
 [data-testid="form-error"],
-[data-testid="list-error"] {
+[data-testid="list-error"],
+[data-testid="create-error"],
+.not-found {
   margin: 0.6rem 0 0;
   color: #9b2c1a;
+}
+
+.room-name {
+  margin: 0 0 1rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.share {
+  margin-top: 1.75rem;
+}
+
+.share-url {
+  margin: 0;
+  word-break: break-all;
+  user-select: all;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.copy {
+  margin-top: 0.65rem;
+  padding: 0.55rem 1rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: var(--ink);
+  color: var(--paper);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.copied {
+  min-height: 1.4rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+  opacity: 0.8;
 }
 
 .queue h2 {
